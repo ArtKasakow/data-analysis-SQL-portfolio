@@ -17,6 +17,10 @@ Later on the created view will be used to visualize the exploration in Tableau. 
 https://public.tableau.com/app/profile/artur.kasakow/viz/CovidDashboardGlobal/Dashboard1
 (Tableau Dashboard with Covid data created from SQL queries)
 
+For Data Cleaning purposes I used different SQL skills which are lsited below to clean and format the data for further data analysis.
+The query set is provided in the following file: Data_cleaning_SQL.sql
+The data set is provided in the following file: Nashville Housing Data for Data Cleaning.xlsx
+
 #### Skills
 
 - Joins
