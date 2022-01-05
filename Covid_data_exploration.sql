@@ -4,154 +4,118 @@ Skills used: Joins, CTE's, Temp Tables, Windows Functions, Aggregate Functions, 
 
 */
 
-SELECT *
-FROM CovidAnalysis..CovidDeaths
-WHERE continent IS NOT NULL 
-ORDER BY 3, 4
+-- CHAPTER 1
+-- Analyzing total cases vs. total deaths
 
---SELECT *
---FROM CovidAnalysis..CovidVaccinations
---WHERE continent IS NOT NULL
---ORDER BY 3, 4
-
--- Choosing Data for Data Exploration
-
-SELECT location, date, population, total_cases, new_cases, total_deaths
-FROM CovidAnalysis..CovidDeaths
-WHERE continent IS NOT NULL
+SELECT [location], [date], total_cases, total_deaths, CAST(total_deaths as float)/CAST(total_cases as float)*100 AS death_percentage
+FROM SQLTutorial..CovidDeaths
+-- WHERE [location] LIKE 'Spain'
 ORDER BY 1, 2
 
 
--- Checking Total Deaths vs. Total Cases
--- Displaying probabilty of dying when contracting covid in your country
+-- Infection rates in Spain
 
-SELECT location, date, population, total_cases, total_deaths, total_deaths/total_cases*100 AS death_rate
-FROM CovidAnalysis..CovidDeaths
-WHERE continent IS NOT NULL
-AND location LIKE '%Germany%'
+SELECT [location], [date], total_cases, population, CAST(total_cases AS float)/CAST(population AS float)*100 AS infection_percentage
+FROM SQLTutorial..CovidDeaths
+WHERE [location] LIKE 'Spain'
 ORDER BY 1, 2
 
 
--- Checking Total Cases of Population
--- Display the percentage of people infected with Covid amongst the population
+-- Highest infetion rate per country
 
-SELECT location, date, population, total_cases, total_cases/population*100 AS infected_population_ratio
-FROM CovidAnalysis..CovidDeaths
+SELECT [location], population, MAX(total_cases) AS highest_infection_rate, CAST(MAX(total_cases) AS float)/CAST(population AS float)*100 AS infection_rate
+FROM SQLTutorial..CovidDeaths
 WHERE continent IS NOT NULL
-AND location LIKE 'Germany'
-ORDER BY 1, 2
+GROUP BY [location], population
+ORDER BY infection_rate DESC
 
--- Countries with highest infection rate compared to the population
 
-SELECT location, population, MAX(total_cases) AS highest_infection_count, MAX(total_cases/population*100) AS highest_infection_rate
-FROM CovidAnalysis..CovidDeaths
+-- Analyzing highest death count per population
+
+SELECT [location], population, MAX(total_deaths) AS highest_death_count, CAST(MAX(total_deaths) AS float)/CAST(population AS float)*100 AS death_rate
+FROM SQLTutorial..CovidDeaths
 WHERE continent IS NOT NULL
--- AND location LIKE 'Germany'
-GROUP BY location, population
-ORDER BY highest_infection_rate DESC
+GROUP BY [location], population
+ORDER BY highest_death_count DESC
 
 
--- Countries with the highest number of deaths
+-- Analyzing highest death count by continent
 
-SELECT location, population, MAX(CAST(total_deaths AS int)) AS death_count, MAX(CAST(total_deaths AS int))/population*100 AS death_rate_percentage
-FROM CovidAnalysis..CovidDeaths
+SELECT continent, SUM(new_deaths) as highest_death_count, AVG(population) AS average_population
+FROM SQLTutorial..CovidDeaths
 WHERE continent IS NOT NULL
--- AND country LIKE 'Germany'
-GROUP BY location, population
-ORDER BY 3 DESC
+GROUP BY continent
+ORDER BY 2 DESC
 
 
+-- Gobal development of Covid cases and deaths per day
 
--- Exploratory Data Analysis(EDA) on continent level
-
--- Displaying contintents with the highest death count
-
-SELECT location, MAX(CAST(total_deaths AS int)) AS death_count
-FROM CovidAnalysis..CovidDeaths
-WHERE continent IS NULL
-GROUP BY location
-ORDER BY death_count DESC
-
-
-
--- Checking Global Covid numbers as progression
-
-SELECT SUM(new_cases) AS total_cases, SUM(CAST(new_deaths AS INT)) AS total_deaths, SUM(CAST(new_deaths AS INT)) / SUM(new_cases) * 100 AS death_percentage
-FROM CovidAnalysis..CovidDeaths
+SELECT date, SUM(new_cases) AS total_cases_global, SUM(new_deaths) AS total_deaths_global, CAST(SUM(new_deaths) AS float)/CAST(SUM(new_cases) AS float)*100 AS death_rate_global
+FROM SQLTutorial..CovidDeaths
 WHERE continent IS NOT NULL
--- Total percentage of people dying due to Covid is around 2.2% @7/10/2021
+GROUP BY date
+ORDER BY 1
 
 
+-- Gobal development of Covid cases and deaths total
 
+SELECT SUM(new_cases) AS total_cases_global, SUM(new_deaths) AS total_deaths_global, CAST(SUM(new_deaths) AS float) / CAST(SUM(new_cases) AS float)*100 AS death_percentage
+FROM SQLTutorial..CovidDeaths
+WHERE continent IS NOT NULL
 
--- Total Population vs Vaccinations
--- Displays percentage vaccined (at least one) in population
+-- CHAPTER 2: Using CTE and Joins
+-- Comparing total population vs. vaccinations
 
-SELECT dt.continent, dt.location, dt.date, dt.population, vc.new_vaccinations,
-SUM(CONVERT(INT, vc.new_vaccinations)) OVER (PARTITION BY dt.location ORDER BY dt.location, dt.date) AS rolling_vaccination_count
-FROM CovidAnalysis..CovidDeaths dt
-JOIN CovidAnalysis..CovidVaccinations vc
-	ON dt.location =  vc.location
-	AND dt.date = vc.date
-WHERE dt.continent IS NOT NULL
+WITH PeopleVaccinated (continent, location, date, population, people_vaccinated, total_vaccinations)
+AS (
+SELECT cdea.continent, cdea.[location], cdea.[date], cdea.population, cvac.people_vaccinated, SUM(CAST(cvac.people_vaccinated AS bigint)) OVER (PARTITION BY cdea.location ORDER BY cdea.location, cdea.Date) AS total_vaccinations
+FROM SQLTutorial..CovidDeaths cdea
+JOIN SQLTutorial..CovidVacs cvac
+    ON cdea.date = cvac.date 
+    AND cdea.location = cvac.location
+)
+SELECT *, CONVERT(float, people_vaccinated)/CONVERT(float, population)*100 AS people_vaccination_rate
+FROM PeopleVaccinated
+WHERE location LIKE 'Germany'
 ORDER BY 2, 3
 
 
--- Using CTE to calculate on Partition By in previous query
+-- CHAPTER 3: TEMP Table
 
-WITH VaccinedPopulation (continent, location, date, poplation, new_vaccinations, rolling_vaccination_count) 
-AS
+DROP TABLE IF EXISTS #PeopleVaccinated
+CREATE TABLE #PeopleVaccinated
 (
-SELECT dt.continent, dt.location, dt.date, dt.population, vc.new_vaccinations,
-SUM(CONVERT(INT, vc.new_vaccinations)) OVER (PARTITION BY dt.location ORDER BY dt.location, dt.date) AS rolling_vaccination_count
-FROM CovidAnalysis..CovidDeaths dt
-JOIN CovidAnalysis..CovidVaccinations vc
-	ON dt.location =  vc.location
-	AND dt.date = vc.date
-WHERE dt.continent IS NOT NULL
--- ORDER BY 2, 3
+    continent NVARCHAR(255),
+    location NVARCHAR(255),
+    date DATETIME,
+    population float,
+    people_vaccinated float,
+    total_vaccinations FLOAT
 )
-SELECT *, rolling_vaccination_count/poplation*100 AS vaccinated_population_percentage
-FROM VaccinedPopulation
+INSERT INTO #PeopleVaccinated
+SELECT cdea.continent, cdea.[location], cdea.[date], cdea.population, cvac.people_vaccinated, SUM(CAST(cvac.people_vaccinated AS bigint)) OVER (PARTITION BY cdea.location ORDER BY cdea.location, cdea.Date) AS total_vaccinations
+FROM SQLTutorial..CovidDeaths cdea
+JOIN SQLTutorial..CovidVacs cvac
+    ON cdea.date = cvac.date 
+    AND cdea.location = cvac.location
+
+SELECT *, people_vaccinated / population * 100 AS people_vaccination_rate
+FROM #PeopleVaccinated
+WHERE location LIKE 'Germany'
+ORDER BY 2, 3
 
 
+-- CHAPTER 4: Views
 
--- TEMP TABLE
--- Using Temp Table to perform Calculation on Partition By in previous query
+DROP VIEW IF EXISTS PeopleVaccinatedGlobally
+CREATE VIEW PeopleVaccinatedGlobally AS
+SELECT cdea.continent, cdea.[location], cdea.[date], cdea.population, cvac.people_vaccinated, SUM(CAST(cvac.people_vaccinated AS bigint)) OVER (PARTITION BY cdea.location ORDER BY cdea.location, cdea.date) AS total_vaccinations
+FROM SQLTutorial..CovidDeaths cdea
+JOIN SQLTutorial..CovidVacs cvac
+    ON cdea.date = cvac.date 
+    AND cdea.location = cvac.location
+WHERE cdea.continent IS NOT NULL
 
-DROP TABLE IF EXISTS #VaccinatedPoplulatinPercentage 
-CREATE TABLE #VaccinatedPoplulatinPercentage
-(
-continent varchar(255),
-location varchar(255),
-date datetime,
-population numeric,
-new_vaccinations numeric,
-rolling_vaccination_count numeric,
-)
-INSERT INTO #VaccinatedPoplulatinPercentage
-SELECT dt.continent, dt.location, dt.date, dt.population, vc.new_vaccinations,
-SUM(CONVERT(INT, vc.new_vaccinations)) OVER (PARTITION BY dt.location ORDER BY dt.location, dt.date) AS rolling_vaccination_count
-FROM CovidAnalysis..CovidDeaths dt
-JOIN CovidAnalysis..CovidVaccinations vc
-	ON dt.location =  vc.location
-	AND dt.date = vc.date
-WHERE dt.continent IS NOT NULL
--- ORDER BY 2, 3
-SELECT *, rolling_vaccination_count/population*100 AS vaccinated_population_percentage
-FROM #VaccinatedPoplulatinPercentage
-
-
-
-
--- Creating View to store data for later visualizations
-
-CREATE VIEW VaccinatedPoplulatinPercentage AS
-SELECT dt.continent, dt.location, dt.date, dt.population, vc.new_vaccinations,
-SUM(CONVERT(INT, vc.new_vaccinations)) OVER (PARTITION BY dt.location ORDER BY dt.location, dt.date) AS rolling_vaccination_count
-FROM CovidAnalysis..CovidDeaths dt
-JOIN CovidAnalysis..CovidVaccinations vc
-	ON dt.location =  vc.location
-	AND dt.date = vc.date
-WHERE dt.continent IS NOT NULL
--- ORDER BY 2, 3
+SELECT *
+FROM PeopleVaccinatedGlobally
+ORDER BY 2,3
