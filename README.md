@@ -12,7 +12,7 @@
 ## Description
 
 This project focuses on SQL to explore the data using different techniques and methods.
-Later on the created view will be used to visualize the exploration in Tableau. (See link below)
+Later on the created queries will be used to visualize the exploration in Tableau. (See link below)
 
 https://public.tableau.com/app/profile/artur.kasakow/viz/CovidDashboardGlobal/Dashboard1
 (Tableau Dashboard with Covid data created from SQL queries)
